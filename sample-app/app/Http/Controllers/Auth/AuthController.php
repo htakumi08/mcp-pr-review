@@ -66,6 +66,55 @@ class AuthController extends Controller
         ]);
     }
 
+    public function showEditName(): View
+    {
+        return view('user.edit-name');
+    }
+
+    public function updateName(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $request->user()->update([
+            'name' => $validated['name'],
+        ]);
+
+        return redirect()->route('dashboard');
+    }
+
+    public function showChangePassword(): View
+    {
+        return view('user.change-password');
+    }
+
+    public function changePassword(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'confirmed'],
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return back()->withErrors([
+                'current_password' => '現在のパスワードが正しくありません。',
+            ])->onlyInput('current_password');
+        }
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login')->with('status', 'パスワードを変更しました。新しいパスワードでログインしてください。');
+    }
+
     public function logout(Request $request): RedirectResponse
     {
         Auth::logout();

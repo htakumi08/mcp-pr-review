@@ -8,6 +8,13 @@
 <body>
     <h1>{{ $user->name }}さん、こんにちは</h1>
 
+    <p>
+        <a href="{{ route('profile.name') }}">名前を変更</a>
+    </p>
+    <p>
+        <a href="{{ route('profile.password') }}">パスワードを変更</a>
+    </p>
+
     <form method="POST" action="{{ route('logout') }}">
         @csrf
         <button type="submit">ログアウト</button>
