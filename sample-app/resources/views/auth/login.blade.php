@@ -16,10 +16,6 @@
         </div>
     @endif
 
-    @if (session('status'))
-        <p>{{ session('status') }}</p>
-    @endif
-
     <form method="POST" action="{{ route('login.post') }}">
         @csrf
         <div>

@@ -22,8 +22,4 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [AuthController::class, 'dashboard'])->name('dashboard');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-    Route::get('/profile/name', [AuthController::class, 'showEditName'])->name('profile.name');
-    Route::post('/profile/name', [AuthController::class, 'updateName'])->name('profile.name.post');
-    Route::get('/profile/password', [AuthController::class, 'showChangePassword'])->name('profile.password');
-    Route::post('/profile/password', [AuthController::class, 'changePassword'])->name('profile.password.post');
 });
