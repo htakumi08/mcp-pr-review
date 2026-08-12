@@ -1,6 +1,6 @@
 # PRレビュー結果テンプレート
 
-チャットのプレビューとGitHub review bodyで、次の6セクションを順番どおり使う。プレースホルダーは実際の内容へ置き換える。
+チャットのプレビュー、GitHub PR Conversationコメント、GitHub review bodyで、次の6セクションを順番どおり使う。プレースホルダーは実際の内容へ置き換える。
 
 ## 1. レビュー指摘
 
@@ -96,7 +96,7 @@ GitHub PRではrepositoryとPR番号、base/head refとSHA、changed files、既
 
 ## Inline commentテンプレート
 
-差分上の正確な変更行へ紐付けられる指摘だけ、次の形式でinline commentにする。review bodyの指摘表からは省略しない。
+差分上の正確な変更行へ紐付けられる指摘だけ、次の形式でinline commentにする。PR Conversationコメントまたはreview bodyの指摘表からは省略しない。
 
 ```markdown
 **must (blocking) / 重大度: 中 / F-01 / バリデーションの妥当性**
@@ -108,7 +108,7 @@ GitHub PRではrepositoryとPR番号、base/head refとSHA、changed files、既
 修正方針: trim後の空文字を拒否し、この境界値のtestを追加してください。
 ```
 
-複数ファイルにまたがる問題、差分外が主対象の問題、CIやtest全体の不足、正確な行を確定できない問題はreview bodyだけに記載する。
+複数ファイルにまたがる問題、差分外が主対象の問題、CIやtest全体の不足、正確な行を確定できない問題はPR Conversationコメントまたはreview bodyだけに記載する。
 
 ## 出力前の整合性検証
 

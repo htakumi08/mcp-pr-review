@@ -2,62 +2,32 @@
 
 GitHub Pull RequestとBacklog課題を統合し、要求トレーサビリティを作成してから固定15観点でレビューするためのプロジェクトです。
 
-Docker化したPython MCPサーバーと読み取り専用Backlog API clientを実装済みです。`get_issue_context(backlog_url)` は課題本文、全コメント、変更履歴、親・子・関連課題を取得し、レビュー用の1つのstructured responseへ正規化します。
+## Components
 
-## Runtime
+| Component | Location | Responsibility |
+| --- | --- | --- |
+| PR review skill | [`.agents/skills/pr-review/`](.agents/skills/pr-review/) | GitHub PRとBacklog課題から要求を整理し、固定15観点でレビューして結果を整形・投稿する |
+| Backlog MCP server | [`mcp-server-backlog/`](mcp-server-backlog/) | Backlog課題URLを検証し、課題・コメント・変更履歴・関連情報を読み取り専用で取得する |
+| Sample application | [`sample-app/`](sample-app/) | PRレビュースキルの動作確認に使用するLaravelアプリを提供する |
 
-- Base image: `python:3.13.15-slim-bookworm`
-- MCP transport: stdio
-- Production direct dependencies: `mcp==2.0.0`、`httpx==0.28.1`
-- Development direct dependency: `pytest==9.1.1`
+3つのコンポーネントは責務と開発環境を分離して管理します。PRレビュースキルはBacklog APIの通信詳細を持たず、Backlog MCPサーバーはPR解釈やGitHub投稿を行いません。`sample-app`はレビュー対象の検証用アプリであり、スキルやMCPサーバーの実装には依存しません。
 
-公式MCP SDKが必要とする推移依存はインストールされますが、プロジェクトが直接追加するパッケージは上記3つだけです。runtime targetにはpytestをインストールしません。
+## Review workflow
 
-## Development
+PRレビュースキルは、GitHub PR本文・差分・コメント・CI情報と、PR本文または直接参照されたGitHub Issue本文に含まれるBacklog URLの課題情報を統合します。要求を整理した後、固定15観点でレビューし、`must (blocking)` などのラベル付き指摘を作成します。
 
-```bash
-docker compose build backlog-mcp
-docker compose run --rm --no-deps backlog-mcp pytest
-```
+GitHubへの投稿はユーザーが明示的に依頼した場合だけ行い、PR Conversationの通常コメントを標準とします。GitHub Review submissionやinline commentは、権限と正確な差分位置を確認できる場合だけ補助的に使います。
 
-MCPサーバーは次のコマンドでstdio待機状態になります。Codex用の同じ起動設定は`.codex/config.toml`にあります。
+## Setup
 
-```bash
-docker compose run --rm --no-deps -T backlog-mcp
-```
+Backlog MCPサーバーの環境構築、テスト、実API probeは [`mcp-server-backlog/README.md`](mcp-server-backlog/README.md) を参照してください。プロジェクトスコープのCodex設定は [`.codex/config.toml`](.codex/config.toml) にあり、同ディレクトリのDocker Composeをstdio MCPとして起動します。
 
-## Backlog API probe
-
-`.env.example`を参考に、Git管理されない`.env`へ次を設定します。
-
-```dotenv
-BACKLOG_BASE_URL=https://your-space.backlog.jp
-BACKLOG_API_KEY=your-api-key
-```
-
-課題キーの環境変数は不要です。設定後、確認したいBacklog課題URLをコマンド引数に渡します。Docker内から課題本文と設定上限までのコメントを読み取り、本文を表示せず件数だけを確認できます。
-
-```bash
-docker compose run --rm --no-deps backlog-mcp \
-  python scripts/probe_backlog.py \
-  "https://your-space.backlog.jp/view/PROJECT-1"
-```
-
-stdio MCPの起動と`tools/call`まで含めて確認する場合は、次を実行します。こちらも本文は表示しません。
-
-```bash
-docker compose run --rm --no-deps backlog-mcp \
-  python scripts/probe_mcp.py \
-  "https://your-space.backlog.jp/view/PROJECT-1"
-```
-
-実運用では、PR本文から検出したBacklog URLを `get_issue_context(backlog_url)` へ渡します。MCPがURLのoriginを `BACKLOG_BASE_URL`と照合し、許可されたスペースの`/view/<issue-key>`だけから内部用課題キーを抽出します。
-
-任意設定の既定値は、timeout 10秒、コメント500件、子・関連課題各20件、同一課題cache 60秒です。コメントまたは関連情報の取得に失敗した場合は、取得できた主課題を返しつつ`retrieval.partial`と`retrieval.warnings`で未確認範囲を示します。
+`sample-app`は独立したCompose構成を持ちます。起動方法は [`sample-app/README.md`](sample-app/README.md) を参照してください。
 
 ## Documents
 
-- [Backlog連携の処理フローとアーキテクチャ](docs/architecture.md)
+- [Backlog連携の処理フローと全体アーキテクチャ](docs/architecture.md)
 - [PRレビュースキル](.agents/skills/pr-review/SKILL.md)
 - [レビュー観点](.agents/skills/pr-review/references/review-checklist.md)
 - [レビュー結果テンプレート](.agents/skills/pr-review/references/report-template.md)
+- [GitHub投稿ルール](.agents/skills/pr-review/references/posting-rules.md)

@@ -4,7 +4,7 @@
 
 GitHub connectorを優先し、利用できない場合は認証済みの `gh` CLIを使う。canonicalなrepository、PR番号、URL、title、state、base/head ref、base/head SHAを取得する。対象を推測で別repositoryやローカルcheckoutへ読み替えない。
 
-ユーザーがGitHubへの投稿を明示した場合だけ投稿モードにする。レビュー依頼のみ、投稿意思が曖昧、PRがopenでない、書き込み権限がない場合は投稿しない。
+ユーザーがGitHubへの投稿を明示した場合だけ投稿モードにする。レビュー依頼のみ、投稿意思が曖昧、PRがopenでない、書き込み権限がない場合は投稿しない。投稿方式は `posting-rules.md` に従い、PR Conversation通常コメントを標準とする。
 
 ## 2. レビュー材料を取得する
 
@@ -42,7 +42,7 @@ reviewer_login
 
 ## 5. 重複投稿を防ぐ
 
-review body末尾へ次の識別markerを追加する。
+投稿本文末尾へ次の識別markerを追加する。
 
 ```html
 <!-- pr-review:v1 repo=OWNER/REPO pr=NUMBER base=FULL_SHA head=FULL_SHA -->
@@ -50,15 +50,12 @@ review body末尾へ次の識別markerを追加する。
 
 投稿前に既存reviewとcommentを検索し、同じ投稿者、repository、PR番号、base/head SHAのmarkerがあれば重複投稿しない。他者が置いたmarkerだけで投稿済みと判断しない。
 
-## 6. COMMENT reviewを投稿する
+## 6. PR Conversation通常コメントを投稿する
 
-- actionは `COMMENT` とする。
-- commit IDへ `reviewed_head_sha` を指定する。
-- `report-template.md` の6セクションをreview bodyに使う。
-- inline commentも含め、可能な限り1件のreview submissionへまとめる。
-- inline commentはpatch上の正確な変更行だけに付け、line/side/positionを推測しない。
-- 同じ原因を複数行へ重複投稿しない。
-- 指摘がなくても確認結果と未確認範囲を含むreview bodyを投稿する。
+- `report-template.md` の6セクションを1つのPR Conversationコメント本文に使う。
+- 指摘がなくても確認結果と未確認範囲を含むコメントを投稿する。
+- Review submissionやinline commentを使う場合は `posting-rules.md` のfallback規則に従う。
+- inline commentを追加する場合も、本文の指摘表からは省略しない。
 
 ## 7. 投稿前検証
 
@@ -74,6 +71,6 @@ review body末尾へ次の識別markerを追加する。
 
 ## 8. 投稿結果を確認する
 
-投稿後にreviewを再取得し、投稿者、本文、marker、head SHA、予定したinline comment数を確認する。timeoutやpartial failureでは再投稿せず、既存reviewを再取得して成否を判定する。確認できなければ `投稿結果不明` と報告する。
+投稿後にPR Conversationコメントまたはreviewを再取得し、投稿者、本文、marker、対象base/head SHA、予定したinline comment数を確認する。timeoutやpartial failureでは再投稿せず、既存comment/reviewを再取得して成否を判定する。確認できなければ `投稿結果不明` と報告する。
 
 inline anchorだけが不正で未投稿と確認でき、head SHAが不変なら、該当指摘をbody-onlyへ移して最大1回だけ再試行する。

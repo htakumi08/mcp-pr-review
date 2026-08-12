@@ -6,18 +6,7 @@ GitHub Pull Requestの説明と実装差分だけでなく、PRが参照するBa
 
 初期スコープでは、Backlog MCPは読み取り専用の `get_issue_context` だけを公開する。課題更新、コメント投稿、添付ファイル取得、Wiki・Git操作、GitHubへの書き込みはBacklog MCPの責務に含めない。GitHubへのレビュー投稿はPRレビュースキルがユーザーの明示依頼を確認した場合だけ行う。
 
-## 2. Redmine構成からの変更点
-
-| 項目 | 旧Redmine構成 | 新Backlog構成 |
-| --- | --- | --- |
-| 課題管理基盤 | Redmine applicationとDBをDockerで運用 | Backlog SaaSを利用 |
-| 自作コンテナ | Redmine MCPに加えてRedmine・DBが必要 | Backlog MCPの1コンテナのみ |
-| 課題識別子 | 数値のissue ID | `PROJECT-123`形式のissue key |
-| 履歴 | journalsとfield changes | commentsと各commentの`changeLog` |
-| 接続制御 | 許可したRedmine host | `BACKLOG_BASE_URL`と完全一致するspaceだけ |
-| 主な運用制約 | Redmine・DBの起動、migration、seed | API認証、ページング、レート制限 |
-
-## 3. システム構成
+## 2. システム構成
 
 ```mermaid
 flowchart LR
@@ -39,7 +28,7 @@ flowchart LR
 | Backlog API client | HTTPS、認証、timeout、response DTO、rate-limit情報の取得 | 要求の意味解釈、MCP schema |
 | GitHub連携 | PR、Issue、diff、review、CIの取得と明示時の投稿 | Backlogデータの取得 |
 
-## 4. レビュー処理フロー
+## 3. レビュー処理フロー
 
 ```mermaid
 sequenceDiagram
@@ -67,7 +56,7 @@ sequenceDiagram
     Skill->>Skill: 固定15観点で指摘F-xxを作成
     Skill-->>User: 6セクションのレビュー結果
     opt GitHub投稿が明示された
-        Skill->>GitHub: head SHA再確認後にCOMMENT review投稿
+        Skill->>GitHub: head SHA再確認後にPR Conversation通常コメントを投稿
     end
 ```
 
@@ -76,14 +65,14 @@ sequenceDiagram
 1. repository、PR番号、base/head SHAを確定し、PR本文、関連GitHub Issue、discussion、diff、CIを取得する。
 2. PR本文と直接参照されたGitHub Issue本文だけからBacklog URLを検出する。
 3. Backlog URLごとに `get_issue_context(backlog_url)` を1回呼ぶ。
-4. MCPがURLのscheme・host・portを `BACKLOG_BASE_URL` と完全一致させ、`/view/<issue-key>` から内部用課題キーを抽出して課題詳細と全コメントを取得する。
-5. MCPはコメントの`changeLog`を分離し、取得件数、切り詰め有無、rate-limit情報を含む正規化結果を返す。
+4. MCPがURLのscheme・host・portを `BACKLOG_BASE_URL` と完全一致させ、`/view/<issue-key>` から内部用課題キーを抽出して課題詳細と設定上限までのコメントを取得する。
+5. MCPはコメントの`changeLog`を分離し、取得件数、切り詰め有無、partial状態、sanitized warningを含む正規化結果を返す。
 6. スキルはPR、GitHub Issue、Backlog本文、comment、changeLogの出所を保持したまま要求を `R-001` から採番する。
 7. 要求と実装、test、設定、docsを突合し、固定15観点をすべて判定する。
 8. 指摘を `must`、`question`、`suggestion`、`nitpick` と重大度で分類し、要求IDと双方向に対応付ける。
-9. プレビューモードではチャットだけに表示する。投稿モードではhead SHAの不変を確認してGitHubへ1件のCOMMENT reviewとして投稿する。
+9. プレビューモードではチャットだけに表示する。投稿モードではhead SHAの不変を確認してGitHub PR Conversationへ1件の通常コメントとして投稿する。
 
-## 5. Backlog MCPツール契約
+## 4. Backlog MCPツール契約
 
 ### Input
 
@@ -102,14 +91,18 @@ sequenceDiagram
   "issue": {
     "id": 12345,
     "key": "PROJECT-123",
-    "project_key": "PROJECT",
+    "project_id": 100,
     "summary": "...",
     "description": "...",
     "status": "...",
     "priority": "...",
+    "issue_type": "...",
     "assignee": null,
     "parent_issue_id": null,
     "custom_fields": [],
+    "categories": [],
+    "versions": [],
+    "milestones": [],
     "created_at": "...",
     "updated_at": "..."
   },
@@ -135,22 +128,24 @@ sequenceDiagram
 
 Backlog APIの課題詳細 `GET /api/v2/issues/:issueIdOrKey` とコメント一覧 `GET /api/v2/issues/:issueIdOrKey/comments` を内部で使用する。コメントは古い順に正規化し、API上のページ順を要求の優先順位として扱わない。
 
-### Error
+### Errorとpartial result
 
-| code | 条件 | retry方針 |
+主課題のURL検証または取得に失敗した場合は、API keyやrequest URLを含まないsanitized exceptionとしてMCP tool呼び出しを失敗させる。コメント、親課題、子課題、関連課題の取得失敗は主課題を失敗させず、`retrieval.partial = true`と`retrieval.warnings`の`source`・error class名で返す。rate-limitのreset時刻はclient内の例外では保持するが、現在のtool outputには公開しない。
+
+| 内部分類 | 条件 | retry方針 |
 | --- | --- | --- |
-| `invalid_backlog_url` | 許可外origin、path、課題キー形式 | retryしない |
-| `unauthorized` | API keyが無効 | retryしない |
-| `forbidden` | 課題・projectを閲覧できない | retryしない |
-| `not_found` | 課題が存在しない | retryしない |
-| `rate_limited` | Backlog APIが429を返した | reset情報を返し、MCP内部で長時間待機しない |
-| `upstream_timeout` | Backlog APIがtimeout | MCP内ではretryせず、部分取得可能な範囲を返す |
-| `upstream_schema_error` | 想定schemaと異なる | retryせず、本文をログへ出さない |
-| `partial_result` | コメントなどを最後まで取得できない | 取得済み範囲と未確認範囲を返す |
+| `BacklogUrlError` | 許可外origin、path、課題キー形式 | retryしない |
+| `BacklogUnauthorizedError` | API keyが無効 | retryしない |
+| `BacklogForbiddenError` | 課題・projectを閲覧できない | retryしない |
+| `BacklogNotFoundError` | 課題が存在しない | retryしない |
+| `BacklogRateLimitedError` | Backlog APIが429を返した | MCP内部で長時間待機しない |
+| `BacklogTimeoutError` | Backlog APIがtimeout | MCP内部でretryしない |
+| `BacklogTransportError` | 通信失敗または想定外HTTP status | MCP内部でretryしない |
+| `BacklogSchemaError` | invalid JSONまたは想定schemaと異なる | retryせず、本文をログへ出さない |
 
-## 6. 目標ディレクトリ構成
+## 5. 現在のディレクトリ構成
 
-以下は実装完了時の目標構成であり、各コメントはそのファイルまたはディレクトリの責務を表す。`uv.lock`は導入せず、現段階では`pyproject.toml`で3つの直接依存を完全固定する。
+PRレビュースキル、Backlog MCPサーバー、検証用Laravelアプリを独立した単位として管理する。各コメントは、そのファイルまたはディレクトリの責務を表す。
 
 ```text
 mcp-pr-review/
@@ -165,85 +160,49 @@ mcp-pr-review/
 │               ├── severity-and-labels.md        # must等のラベルと重大度を別軸で定義する。
 │               ├── report-template.md            # チャットとGitHubで共通のレビュー形式を定義する。
 │               ├── github-pr-workflow.md         # GitHub情報取得・SHA固定・重複防止・投稿を定義する。
+│               ├── posting-rules.md              # PR Conversationを標準とする投稿方式とfallbackを定義する。
 │               ├── review-context-workflow.md    # 複数情報源から要求とトレーサビリティを作成する。
 │               └── backlog-review-workflow.md    # Backlog URL検証・取得・履歴解釈・失敗時動作を定義する。
 ├── .codex/
 │   └── config.toml                               # Docker化したBacklog MCPのstdio起動設定を保持する。
-├── src/
-│   └── backlog_mcp/                              # Python application packageとしてMCPサーバーを実装する。
-│       ├── __init__.py                           # packageの公開versionだけを提供する。
-│       ├── __main__.py                           # `python -m backlog_mcp`の薄いentry pointにする。
-│       ├── config.py                             # 環境変数を型付き設定へ変換し起動時に検証する。
-│       ├── domain/                               # BacklogやMCP frameworkに依存しない内部モデルを置く。
-│       │   ├── __init__.py                       # domain packageの公開境界を定義する。
-│       │   ├── models.py                         # IssueContext、Comment、ChangeLog等を表現する。
-│       │   └── errors.py                         # application全体で使う分類済みerrorを定義する。
-│       ├── application/                          # API取得結果をレビュー用contextへ組み立てるuse caseを置く。
-│       │   ├── __init__.py                       # application packageの公開境界を定義する。
-│       │   └── get_issue_context.py              # 課題・コメント・必要最小限の親子情報を統合する。
-│       ├── backlog/                              # Backlog API v2固有の通信と変換を閉じ込める。
-│       │   ├── __init__.py                       # Backlog adapterの公開境界を定義する。
-│       │   ├── client.py                         # httpxで認証・timeout・pagination・rate limitを扱う。
-│       │   ├── url.py                            # 許可spaceの課題URLを検証して内部用課題キーを抽出する。
-│       │   ├── dto.py                            # upstream responseを厳格に検証するDTOを定義する。
-│       │   ├── mapper.py                         # Backlog DTOをdomain modelへ変換する。
-│       │   └── errors.py                         # HTTP statusと通信失敗をdomain errorへ変換する。
-│       └── mcp/                                  # MCP protocolへの公開境界だけを担当する。
-│           ├── __init__.py                       # MCP adapter packageの公開境界を定義する。
-│           ├── server.py                         # MCPServerを生成しtoolを登録する。
-│           ├── instructions.py                   # 読み取り専用・許可space等のserver instructionsを定義する。
-│           ├── schemas.py                        # tool input/outputの公開schemaを定義する。
-│           └── tools/
-│               ├── __init__.py                   # tool registrationの公開境界を定義する。
-│               └── get_issue_context.py          # MCP引数をuse caseへ渡し構造化結果・errorを返す。
-├── tests/                                        # production packageと責務境界を対応させて検証する。
-│   ├── unit/                                     # 外部通信なしで各moduleの分岐と変換を高速検証する。
-│   │   ├── test_config.py                        # 必須env、URL制約、secret表現を検証する。
-│   │   ├── domain/                               # domain modelとerror分類を検証する。
-│   │   ├── application/                          # use caseの統合順序・打ち切り・partial結果を検証する。
-│   │   ├── backlog/                              # MockTransportでHTTP・pagination・429・redactionを検証する。
-│   │   └── mcp/                                  # tool schemaとapplicationへの委譲だけを検証する。
-│   ├── integration/
-│   │   └── test_stdio.py                         # subprocessのstdioでinitialize・tools/list・tools/callを検証する。
-│   ├── contract/
-│   │   └── test_backlog_contract.py              # sanitized fixtureがBacklog DTOへ適合することを検証する。
-│   └── fixtures/
-│       └── backlog/                              # API key・本文の機密情報を除いたresponse fixtureを保持する。
-├── evals/                                        # skill全体の判断品質を代表シナリオで評価する。
-│   ├── normal-pr.md                              # PRとBacklog要求が一致する正常系を評価する。
-│   ├── backlog-spec-gap.md                       # Backlog要求の実装漏れをmustとして検出できるか評価する。
-│   ├── ambiguous-backlog-spec.md                 # 矛盾をquestionとして扱い推測しないことを評価する。
-│   └── unavailable-backlog.md                    # 取得失敗時に限定レビューへ切り替えることを評価する。
+├── mcp-server-backlog/                           # Backlog読み取り専用MCPを独立したPython projectとして管理する。
+│   ├── src/backlog_mcp/                          # MCP、application、Backlog API adapter、設定を実装する。
+│   ├── tests/                                    # unit、stdio integration、sanitized fixtureを管理する。
+│   ├── scripts/                                  # 実APIとstdio MCPの手動probeを提供する。
+│   ├── Dockerfile                                # development/runtimeの最小Python imageを作成する。
+│   ├── compose.yaml                              # ローカル開発とCodex向けstdio起動を定義する。
+│   ├── pyproject.toml                            # Python version、直接依存、pytest設定を集約する。
+│   ├── .env.example                              # secret値を含めず必要な環境変数名だけを示す。
+│   ├── .dockerignore                             # secret、VCS、cacheをbuild contextから除外する。
+│   ├── .gitignore                                # secret、virtualenv、test生成物を除外する。
+│   └── README.md                                 # MCPサーバー単体の構築、設定、検証方法を説明する。
+├── sample-app/                                   # PRレビューのE2E確認に使うLaravel applicationを管理する。
+│   ├── Dockerfile                                # Laravel開発用の最小PHP imageを作成する。
+│   ├── compose.yaml                              # sample appのローカル実行環境を定義する。
+│   └── README.md                                 # sample appの準備と起動方法を説明する。
 ├── docs/
-│   └── architecture.md                           # 処理フロー、責務分離、目標構成、テスト方針を説明する。
-├── Dockerfile                                    # 非root・stdio前提の最小Python runtime imageを作成する。
-├── compose.yaml                                  # local smoke test用にenvとMCP containerを定義する。
-├── .dockerignore                                 # secret、VCS、cache、test生成物をbuild contextから除外する。
-├── .env.example                                  # secret値を含めず必要な環境変数名だけを示す。
-├── .gitignore                                    # API key、virtualenv、cache、coverage生成物を除外する。
-├── pyproject.toml                                # Python version、依存、lint、type check、pytest設定を集約する。
+│   └── architecture.md                           # 処理フロー、責務分離、現行構成、テスト方針を説明する。
+├── AGENTS.md                                     # リポジトリ全体の編集・レビュー方針を定義する。
 └── README.md                                     # 目的、現在の状態、主要文書への入口を提供する。
 ```
 
-## 7. Pythonパッケージ設計
+## 6. Pythonパッケージ設計
 
-依存方向は外側から内側への一方向とする。
+`mcp-server-backlog/src/backlog_mcp/` は、次の責務で分割する。
 
 ```text
-mcp adapter -> application -> domain
-backlog adapter -> domain
+mcp adapter -> application -> backlog adapter
 bootstrap/config -> mcp adapter + application + backlog adapter
 ```
 
-- `domain` は `httpx` とMCP SDKをimportしない。
 - `application` はBacklog clientのProtocolに依存し、具体的なHTTP clientを直接生成しない。
-- `backlog` はMCPの型を返さず、domain modelまたは分類済みerrorを返す。
-- `mcp` はHTTP statusやBacklog DTOを解釈せず、application resultを公開schemaへ変換する。
+- `backlog` はHTTP、URL検証、response DTO、分類済みerrorを扱い、MCPの型を返さない。
+- `mcp` はHTTP statusやBacklog responseを解釈せず、application resultを公開toolとして返す。
 - `__main__.py` だけがconfig、client、use case、serverを組み立てる。
 
 Pythonは公式MCP Python SDK v2を利用し、transportは初期段階ではstdioだけを有効にする。1回の未cache取得では1つの`httpx.AsyncClient`を共有し、課題・コメント・関連情報の取得完了時に必ずcloseする。直接依存はproductionの`mcp==2.0.0`と`httpx==0.28.1`、developmentの`pytest==9.1.1`だけとし、MCP SDKが要求する推移依存を独自依存と混同しない。
 
-## 8. 設定とsecret
+## 7. 設定とsecret
 
 | 環境変数 | 必須 | 用途 |
 | --- | --- | --- |
@@ -256,39 +215,37 @@ Pythonは公式MCP Python SDK v2を利用し、transportは初期段階ではstd
 
 API keyはBacklog API仕様上query parameterとして送信するため、request URL、redirect先、例外のrequest表現をログへ出さない。stdoutはMCPのJSON-RPC専用とし、application logはstderrへ出す。
 
-## 9. Docker方針
+## 8. Docker方針
 
-- Python runtimeとlock済みproduction dependencyだけを含むmulti-stage buildにする。
-- non-root user、read-only root filesystem、不要なLinux capabilityなしで動かす。
+- developmentとruntimeを分けたmulti-stage buildにし、runtimeへpytestを含めない。
+- development/runtimeの両targetをnon-root userで動かす。
 - API keyをimage、build args、Compose fileへ埋め込まず、実行時envから渡す。
 - stdio transportではcontainerのstdinを開き、stdoutへログを混在させない。
+- Composeは開発とCodex連携のためdevelopment targetを使用し、sourceをbind mountする。
 - Backlog SaaS以外へのegress制限はDocker単体で完全には保証できないため、application側でもbase URLを固定する。
-- Redmine application、DB、volume、migration、seed serviceは構成に含めない。
 
-## 10. テスト方針
+## 9. テスト方針
 
 | 層 | 主な対象 | 方針 |
 | --- | --- | --- |
-| Unit | config、validator、mapper、use case、tool adapter | networkとsubprocessを使わず、境界値とerror分岐を網羅する |
+| Unit | config、URL validator、DTO、use case、tool adapter | networkとsubprocessを使わず、境界値とerror分岐を検証する |
 | HTTP adapter | Backlog client | `httpx.MockTransport`でpagination、timeout、429、invalid JSON、secret非露出を検証する |
 | MCP integration | stdio server | 実subprocessへinitialize、tools/list、tools/callを送りJSON-RPCとstderr分離を検証する |
-| Contract | Backlog response DTO | sanitized fixtureで必須・nullable・未知fieldへの互換性を検証する |
-| Docker smoke | built image | non-root起動、stdio応答、env不足時のfail-fastを検証する |
-| Skill eval | PRレビュー結果 | 要求抽出、15観点、label、traceability、取得失敗時の挙動をシナリオ評価する |
+| Fixture | Backlog response DTO | sanitized fixtureをunit testから読み、実response相当の変換を検証する |
+| Docker smoke | built image | test実行、non-root起動、stdio応答、env不足時のfail-fastを確認する |
+| Skill E2E | PRレビュー結果 | 実PRで要求抽出、15観点、label、traceability、GitHub通常コメント投稿を確認する |
 
 通常CIでは実Backlog spaceへ接続しない。実APIのsmoke testは明示的な手動jobに分離し、読み取り専用アカウント、専用課題、短いtimeout、呼び出し上限を使う。
 
-## 11. 実装順序
+## 10. 現在の実装状態
 
-1. `python:3.13.15-slim-bookworm`のdevelopment/runtime imageとComposeを作る。完了。
-2. `get_issue_context`とstdio integration testを作る。完了。
-3. 課題・コメントAPIを接続し、コメントpaginationと変更履歴正規化を作る。完了。
-4. 親・子・関連課題、partial結果、TTL cacheを作る。完了。
-5. `.codex/config.toml`からDocker Composeのstdioサーバーを起動できるようにする。完了。
-6. GitHub PR取得とBacklog MCPを使ったskill evalを整備する。未着手。
-3. config、sanitized fixture、DTO、課題・コメント取得client、error変換をtest-firstで作る。完了。
-4. 利用者が`.env`を設定し、Docker内のprobeへ課題URLを渡して実Backlog課題とコメントを確認する。利用者確認待ち。
-5. `get_issue_context` use caseでAPI clientを統合し、正規化、打ち切り、取得メタデータを実装する。
-6. コメントpagination、親子課題、cache、partial resultを追加する。
-7. runtime imageをCodex MCP設定へ登録する。
-8. PRレビュースキルのevalを実行し、GitHubとBacklogの要求統合を確認する。
+| 項目 | 状態 |
+| --- | --- |
+| 最小Python image、development/runtime target、Compose | 完了 |
+| Backlog課題・コメント・変更履歴・親子・関連課題の取得 | 完了 |
+| ページング、上限、timeout、429分類、partial result、TTL cache | 完了 |
+| stdio MCPのtool公開とunit/integration test | 完了 |
+| `.codex/config.toml`からComposeを使うMCP登録 | 完了 |
+| GitHub PR・Backlog課題・差分の統合レビュー | 実PRで確認済み |
+| PR Conversation通常コメントへのレビュー投稿 | 実PRで確認済み |
+| 再現可能なskill evalシナリオの自動化 | 未整備。今後、判断品質を継続検証する場合に追加する |
