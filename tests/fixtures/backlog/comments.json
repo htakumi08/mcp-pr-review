@@ -1,0 +1,39 @@
+[
+  {
+    "id": 2001,
+    "content": "Please add validation for empty input.",
+    "changeLog": null,
+    "createdUser": {
+      "id": 10,
+      "userId": "fixture-user",
+      "name": "Fixture User",
+      "roleType": 2,
+      "lang": "en",
+      "mailAddress": "redacted@example.invalid"
+    },
+    "created": "2026-08-13T00:30:00Z",
+    "updated": "2026-08-13T00:30:00Z"
+  },
+  {
+    "id": 2002,
+    "content": "The validation requirement is confirmed.",
+    "changeLog": [
+      {
+        "field": "status",
+        "newValue": "In Progress",
+        "originalValue": "Open"
+      }
+    ],
+    "createdUser": {
+      "id": 11,
+      "userId": "fixture-reviewer",
+      "name": "Fixture Reviewer",
+      "roleType": 2,
+      "lang": "en",
+      "mailAddress": "redacted@example.invalid"
+    },
+    "created": "2026-08-13T00:45:00Z",
+    "updated": "2026-08-13T00:45:00Z"
+  }
+]
+
