@@ -13,12 +13,18 @@ Docker化したPython MCPサーバーと読み取り専用Backlog API clientを�
 
 公式MCP SDKが必要とする推移依存はインストールされますが、プロジェクトが直接追加するパッケージは上記3つだけです。runtime targetにはpytestをインストールしません。
 
+<<<<<<< Updated upstream
 ## Development
 
 ```bash
 docker compose build backlog-mcp
 docker compose run --rm --no-deps backlog-mcp pytest
 ```
+=======
+PRレビュースキルは、GitHub PR本文・差分・コメント・CI情報と、PR本文または直接参照されたGitHub Issue本文に含まれるBacklog URLの課題情報を統合します。要求を整理した後、固定15観点でレビューし、`【must】（blocking）：中` などのラベル・重大度付き指摘を作成します。
+
+GitHub PR URLを指定してレビューを依頼された場合は、追加の投稿指示を待たず、レビュー後にPR Conversationへ通常コメントを投稿します。「投稿しない」「プレビューのみ」と明示された場合や、PR URLのない一般的なレビューではチャット表示だけにします。GitHub Review submissionやinline commentは、権限と正確な差分位置を確認できる場合だけ補助的に使います。
+>>>>>>> Stashed changes
 
 MCPサーバーは次のコマンドでstdio待機状態になります。Codex用の同じ起動設定は`.codex/config.toml`にあります。
 
