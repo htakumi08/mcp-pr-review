@@ -14,9 +14,9 @@ GitHub Pull RequestとBacklog課題を統合し、要求トレーサビリティ
 
 ## Review workflow
 
-PRレビュースキルは、GitHub PR本文・差分・コメント・CI情報と、PR本文または直接参照されたGitHub Issue本文に含まれるBacklog URLの課題情報を統合します。要求を整理した後、固定15観点でレビューし、`must (blocking)` などのラベル付き指摘を作成します。
+PRレビュースキルは、GitHub PR本文・差分・コメント・CI情報と、PR本文または直接参照されたGitHub Issue本文に含まれるBacklog URLの課題情報を統合します。要求を整理した後、固定15観点でレビューし、`【must】（blocking）：中` などのラベル・重大度付き指摘を作成します。
 
-GitHubへの投稿はユーザーが明示的に依頼した場合だけ行い、PR Conversationの通常コメントを標準とします。GitHub Review submissionやinline commentは、権限と正確な差分位置を確認できる場合だけ補助的に使います。
+GitHub PR URLを指定してレビューを依頼された場合は、追加の投稿指示を待たず、レビュー後にPR Conversationへ通常コメントを投稿します。「投稿しない」「プレビューのみ」と明示された場合や、PR URLのない一般的なレビューではチャット表示だけにします。GitHub Review submissionやinline commentは、権限と正確な差分位置を確認できる場合だけ補助的に使います。
 
 ## Setup
 

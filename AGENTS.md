@@ -12,15 +12,17 @@
 
 ## PRレビュー出力
 
-- レビュー結果は `.agents/skills/pr-review/references/report-template.md` の6セクションに従う。
-- 指摘は `must (blocking)`、`question (blocking)`、`suggestion (non-blocking)`、`nitpick (non-blocking)` のいずれかを付ける。
+- レビュー結果は `.agents/skills/pr-review/references/report-template.md` の5セクションに従い、先頭にラベル別件数と対象観点を示してから、固定15観点と指摘を1つの表へまとめる。
+- 指摘は内部的に `must (blocking)`、`question (blocking)`、`suggestion (non-blocking)`、`nitpick (non-blocking)` のいずれかへ分類し、出力では `【must】（blocking）：中` の形式で見やすく示す。
 - 重大度は実害で決め、修正工数や確度で上下させない。
 - 固定15観点は `.agents/skills/pr-review/references/review-checklist.md` の名称・順序・粒度を維持する。
-- 指摘IDと要求IDは双方向で対応させ、不一致のまま出力しない。
+- 指摘詳細の要求IDと要求表の指摘IDは双方向で対応させ、不一致のまま出力しない。
+- 課題情報の取得・統合手順はレビュー本文へ書かず、要求・指摘の根拠として必要な箇所だけ示す。
 
 ## GitHub投稿
 
-- GitHubへの投稿は、ユーザーが明示的に依頼した場合だけ行う。
+- GitHub PR URLを伴うレビュー依頼では、別途の投稿指示を待たず、レビュー後にPR Conversationへ通常コメントを投稿する。
+- ユーザーが「投稿しない」「プレビューのみ」と明示した場合、またはPR URLのない一般的なレビューでは投稿しない。
 - 投稿先はPR Conversationの通常コメントを標準とする。
 - GitHub Review submissionやinline commentは、権限と正確な差分位置を確認できる場合だけ補助的に使う。
 - 投稿直前にPR state、base/head SHA、既存コメントを再取得する。

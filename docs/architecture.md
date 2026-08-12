@@ -4,7 +4,7 @@
 
 GitHub Pull Requestの説明と実装差分だけでなく、PRが参照するBacklog課題の本文、コメント、変更履歴を要求の根拠として統合し、固定15観点でレビューする。
 
-初期スコープでは、Backlog MCPは読み取り専用の `get_issue_context` だけを公開する。課題更新、コメント投稿、添付ファイル取得、Wiki・Git操作、GitHubへの書き込みはBacklog MCPの責務に含めない。GitHubへのレビュー投稿はPRレビュースキルがユーザーの明示依頼を確認した場合だけ行う。
+初期スコープでは、Backlog MCPは読み取り専用の `get_issue_context` だけを公開する。課題更新、コメント投稿、添付ファイル取得、Wiki・Git操作、GitHubへの書き込みはBacklog MCPの責務に含めない。GitHub PR URL付きのレビュー依頼では、PRレビュースキルがレビュー後にPR Conversationへ通常コメントを投稿する。ユーザーが投稿禁止を明示した場合は投稿しない。
 
 ## 2. システム構成
 
@@ -16,7 +16,7 @@ flowchart LR
     S -->|"stdio / JSON-RPC"| M["Backlog MCP container"]
     M -->|"HTTPS / Backlog API v2"| B["Backlog SaaS"]
     S --> R["Review report"]
-    R -. "explicit request only" .-> G
+    R -. "PR URL review request" .-> G
 ```
 
 ### 責務境界
@@ -26,7 +26,7 @@ flowchart LR
 | PRレビュースキル | GitHub情報取得、Backlog URL検出、要求統合、15観点レビュー、出力整形 | Backlog APIの認証・HTTP詳細 |
 | Backlog MCP | 課題キー検証、API呼び出し、ページング、正規化、secret除去、構造化エラー | PR解釈、コードレビュー、GitHub投稿 |
 | Backlog API client | HTTPS、認証、timeout、response DTO、rate-limit情報の取得 | 要求の意味解釈、MCP schema |
-| GitHub連携 | PR、Issue、diff、review、CIの取得と明示時の投稿 | Backlogデータの取得 |
+| GitHub連携 | PR、Issue、diff、review、CIの取得とPR URL付きレビュー依頼時の投稿 | Backlogデータの取得 |
 
 ## 3. レビュー処理フロー
 
@@ -54,9 +54,12 @@ sequenceDiagram
     Skill->>Skill: 情報源を保持して課題・要求R-xxxを整理
     Skill->>Skill: 要求と実装・test・docsを突合
     Skill->>Skill: 固定15観点で指摘F-xxを作成
-    Skill-->>User: 6セクションのレビュー結果
-    opt GitHub投稿が明示された
+    alt PR URL付きレビュー依頼
         Skill->>GitHub: head SHA再確認後にPR Conversation通常コメントを投稿
+        GitHub-->>Skill: 投稿済みコメント
+        Skill-->>User: 5セクションのレビュー結果と投稿結果
+    else 投稿禁止またはPR URLなし
+        Skill-->>User: 5セクションのレビュー結果
     end
 ```
 
@@ -70,7 +73,7 @@ sequenceDiagram
 6. スキルはPR、GitHub Issue、Backlog本文、comment、changeLogの出所を保持したまま要求を `R-001` から採番する。
 7. 要求と実装、test、設定、docsを突合し、固定15観点をすべて判定する。
 8. 指摘を `must`、`question`、`suggestion`、`nitpick` と重大度で分類し、要求IDと双方向に対応付ける。
-9. プレビューモードではチャットだけに表示する。投稿モードではhead SHAの不変を確認してGitHub PR Conversationへ1件の通常コメントとして投稿する。
+9. PR URL付きレビュー依頼は投稿モードとし、head SHAの不変を確認してGitHub PR Conversationへ1件の通常コメントとして投稿する。投稿禁止が明示された場合とPR URLのない一般レビューはプレビューモードとする。
 
 ## 4. Backlog MCPツール契約
 

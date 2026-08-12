@@ -6,14 +6,16 @@ PRレビュー結果は、GitHub PR Conversationへの通常コメントを標�
 
 | 優先 | 投稿先 | 使用条件 | 備考 |
 | --- | --- | --- | --- |
-| 1 | PR Conversation通常コメント | GitHubへの投稿を明示され、PRがopenで、Issue comment write権限がある | 標準。レビュー結果全体を1コメントにまとめる |
+| 1 | PR Conversation通常コメント | PR URL付きレビュー依頼または明示的な投稿依頼で、PRがopenかつIssue comment write権限がある | 標準。レビュー結果全体を1コメントにまとめる |
 | 2 | GitHub Review submission `COMMENT` | Pull request review write権限があり、review APIが成功する | 使える場合のみ。`APPROVE` と `REQUEST_CHANGES` は自動選択しない |
-| 3 | Inline review comment | 正確なpatch行、side、lineまたはpositionを確定できる | bodyの指摘表から省略せず、重複しない範囲で追加する |
+| 3 | Inline review comment | 正確なpatch行、side、lineまたはpositionを確定できる | bodyの15観点表から省略せず、重複しない範囲で追加する |
 | 4 | チャットのみ | 投稿権限がない、PRがclosed、SHAが変わった、Backlog取得が不完全 | 投稿しない理由と再実行条件を報告する |
 
 ## 通常コメント投稿の仕様
 
-- `report-template.md` の6セクションを1つのPR Conversationコメント本文として投稿する。
+- `report-template.md` の5セクションを1つのPR Conversationコメント本文として投稿する。
+- PR URL付きレビュー依頼では、ユーザーから別途「投稿して」と言われるのを待たない。
+- ユーザーが投稿禁止またはプレビューのみを明示した場合は投稿しない。
 - body末尾へ重複防止markerを必ず入れる。
 - 投稿直前にPR state、base/head SHA、既存コメントを再取得する。
 - 同じ投稿者、同じrepo、同じPR番号、同じbase/head SHAのmarkerが既にあれば再投稿しない。
@@ -38,7 +40,9 @@ PRレビュー結果は、GitHub PR Conversationへの通常コメントを標�
 
 ## 投稿本文の不変条件
 
-- 指摘表、課題コンテキスト、要求トレーサビリティ、15観点、確認範囲、変更概要を含める。
+- ラベル別サマリー、固定15観点と指摘を統合した表、指摘詳細、要求対応、確認範囲、変更概要を含める。
+- 観点表と指摘詳細では、ラベル・blocking区分・重大度を `【must】（blocking）：中` 形式で視覚的に分離する。
 - 指摘IDと要求IDの対応は双方向で一致させる。
-- Backlogを確認した場合は、取得したコメント件数、変更履歴件数、partial/truncated有無を記載する。
+- Backlog取得のpartial、truncated、失敗がレビュー判断に影響する場合だけ、その未確認範囲を記載する。
+- BacklogやGitHub情報を取得・統合したという作業報告は記載しない。
 - API key、secret、private query、不要な個人情報を転載しない。
