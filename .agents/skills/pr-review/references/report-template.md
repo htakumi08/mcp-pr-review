@@ -1,10 +1,6 @@
 # PRレビュー結果テンプレート
 
-<<<<<<< Updated upstream
-チャットのプレビューとGitHub review bodyで、次の6セクションを順番どおり使う。プレースホルダーは実際の内容へ置き換える。
-=======
 チャットのプレビュー、GitHub PR Conversationコメント、GitHub review bodyでは、次の5セクションを順番どおり使う。レビュー判断に必要な結果と根拠を示し、情報を取得・統合した手順そのものは書かない。
->>>>>>> Stashed changes
 
 ## 1. レビュー結果
 
@@ -114,11 +110,7 @@ PRまたは差分で実際に変更された内容を2-4項目で簡潔に記載
 
 ## Inline commentテンプレート
 
-<<<<<<< Updated upstream
-差分上の正確な変更行へ紐付けられる指摘だけ、次の形式でinline commentにする。review bodyの指摘表からは省略しない。
-=======
 差分上の正確な変更行へ紐付けられる指摘だけ、次の形式でinline commentにする。PR Conversationコメントまたはreview bodyの観点表からは省略しない。
->>>>>>> Stashed changes
 
 ```markdown
 **F-01　【must】（blocking）：中　/　バリデーションの妥当性**
@@ -130,7 +122,7 @@ PRまたは差分で実際に変更された内容を2-4項目で簡潔に記載
 修正方針: trim後の空文字を拒否し、この境界値のtestを追加してください。
 ```
 
-複数ファイルにまたがる問題、差分外が主対象の問題、CIやtest全体の不足、正確な行を確定できない問題はreview bodyだけに記載する。
+複数ファイルにまたがる問題、差分外が主対象の問題、CIやtest全体の不足、正確な行を確定できない問題はPR Conversationコメントまたはreview bodyだけに記載する。
 
 ## 出力前の整合性検証
 

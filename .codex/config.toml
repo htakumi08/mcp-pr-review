@@ -3,7 +3,7 @@
 [mcp_servers.backlog]
 command = "docker"
 args = ["compose", "run", "--rm", "--no-deps", "-T", "backlog-mcp"]
-cwd = "."
+cwd = "mcp-server-backlog"
 enabled = true
 required = false
 enabled_tools = ["get_issue_context"]
