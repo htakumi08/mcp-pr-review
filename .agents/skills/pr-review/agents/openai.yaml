@@ -1,0 +1,4 @@
+interface:
+  display_name: "PRレビュー"
+  short_description: "PR・関連課題・Backlogを統合して要求ベースでレビュー"
+  default_prompt: "$pr-review を使って、指定したGitHub PR URLの本文と関連するBacklog課題を把握し、要求ベースでレビューしてPR Conversationへ結果を投稿してください。"

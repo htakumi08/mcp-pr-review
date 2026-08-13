@@ -1,0 +1,12 @@
+# Project-scoped read-only Backlog MCP. Secrets remain in the gitignored .env file.
+
+[mcp_servers.backlog]
+command = "docker"
+args = ["compose", "run", "--rm", "--no-deps", "-T", "backlog-mcp"]
+cwd = "mcp-server-backlog"
+enabled = true
+required = false
+enabled_tools = ["get_issue_context"]
+default_tools_approval_mode = "approve"
+startup_timeout_sec = 60
+tool_timeout_sec = 60

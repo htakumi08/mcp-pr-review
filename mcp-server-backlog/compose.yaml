@@ -1,0 +1,18 @@
+services:
+  backlog-mcp:
+    build:
+      context: .
+      target: development
+    init: true
+    stdin_open: true
+    tty: false
+    environment:
+      BACKLOG_BASE_URL: ${BACKLOG_BASE_URL:-}
+      BACKLOG_API_KEY: ${BACKLOG_API_KEY:-}
+      BACKLOG_TIMEOUT_SECONDS: ${BACKLOG_TIMEOUT_SECONDS:-10}
+      BACKLOG_MAX_COMMENTS: ${BACKLOG_MAX_COMMENTS:-500}
+      BACKLOG_MAX_RELATED_ISSUES: ${BACKLOG_MAX_RELATED_ISSUES:-20}
+      BACKLOG_CACHE_TTL_SECONDS: ${BACKLOG_CACHE_TTL_SECONDS:-60}
+    volumes:
+      - .:/app
+    working_dir: /app
