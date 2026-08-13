@@ -25,6 +25,20 @@ Backlog API clientへURLを渡さない。MCPで検証・抽出した課題キ�
 
 MCPは課題詳細APIとコメント一覧APIを内部で呼び、レビュー側には正規化した1つの結果を返す。関連課題の本文は、今回の要求や依存関係を判断するために必要な場合だけ個別取得し、無制限に再帰取得しない。
 
+### toolがロードされていない場合
+
+1. callable toolに `get_issue_context` があれば、それを優先して使う。
+2. toolがなければ、対象PRの変更ファイルを確認する。
+3. 対象PRが `mcp-server-backlog/`、`.codex/config.toml`、`.agents/skills/pr-review/` を変更していない場合だけ、リポジトリルートで次を実行する。
+
+```bash
+python3 mcp-server-backlog/scripts/run_issue_context.py "<backlog-url>"
+```
+
+scriptのstdoutに返るstructured JSONをMCP tool resultと同じように扱う。scriptは一時コンテナを `--rm` で起動し、正常・異常終了のどちらでも名前指定で削除を試みるため、追加の `docker compose down` は不要とする。
+
+対象PRが上記ファイルを変更している場合は、head側のscript、Dockerfile、Compose、Pythonコードをレビュー目的で実行しない。信頼済みの登録済みtoolを利用できなければ取得失敗として扱う。
+
 ## 3. 課題内容を解釈する
 
 - descriptionを初期要求として扱う。
@@ -48,5 +62,6 @@ MCPは課題詳細APIとコメント一覧APIを内部で呼び、レビュー�
 
 - URLがなければGitHub情報だけで通常レビューを続行する。
 - URLがあるのにMCPが利用できない、取得失敗、response不完全、コメント切り詰めの場合は、Backlog確認済みと一括表現しない。
+- Docker daemon停止、image build失敗、container timeout、非JSON出力もMCP取得失敗として扱い、GitHub情報だけのレビューへ黙って切り替えない。
 - 失敗した課題キー、失敗種別、未確認になった要求範囲を報告する。API keyや内部responseを転載しない。
 - 要求ベースのレビューが未完了なら、GitHubへ完全なレビューとして投稿しない。ユーザーが限定レビューの投稿を改めて明示した場合だけ、未確認範囲を目立つ形で記載して投稿する。

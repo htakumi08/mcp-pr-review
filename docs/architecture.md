@@ -6,17 +6,30 @@ GitHub Pull Requestの説明と実装差分だけでなく、PRが参照するBa
 
 初期スコープでは、Backlog MCPは読み取り専用の `get_issue_context` だけを公開する。課題更新、コメント投稿、添付ファイル取得、Wiki・Git操作、GitHubへの書き込みはBacklog MCPの責務に含めない。GitHub PR URL付きのレビュー依頼では、PRレビュースキルがレビュー後にPR Conversationへ通常コメントを投稿する。ユーザーが投稿禁止を明示した場合は投稿しない。
 
-## 2. システム構成
+## 2. 全体処理フロー
 
 ```mermaid
-flowchart LR
-    U["User"] --> H["MCP host / Codex"]
-    H --> S["PR review skill"]
-    S --> G["GitHub connector or gh"]
-    S -->|"stdio / JSON-RPC"| M["Backlog MCP container"]
-    M -->|"HTTPS / Backlog API v2"| B["Backlog SaaS"]
-    S --> R["Review report"]
-    R -. "PR URL review request" .-> G
+flowchart TD
+    U["ユーザー"] --> S["pr-review スキル"]
+    S --> G["GitHub Connector / GitHub MCP"]
+    G --> GH["GitHub API"]
+    GH --> G
+    G --> D{"Backlog URLがあるか"}
+    D -->|"いいえ"| K["要求整理・固定15観点レビュー"]
+    D -->|"はい"| T{"get_issue_contextを利用できるか"}
+    T -->|"はい"| M["Backlog MCP"]
+    T -->|"いいえ"| F["one-shot scriptで一時コンテナを起動"]
+    F --> M
+    M --> BA["Backlog REST API"]
+    BA --> M
+    M --> K
+    F -. "起動・取得失敗" .-> L["Backlog未確認の限定レビュー"]
+    L --> C["チャットにプレビュー"]
+    K --> V["レビュー結果生成"]
+    V --> P{"投稿モードか"}
+    P -->|"投稿禁止またはPR URLなし"| C
+    P -->|"PR URL付きレビューまたは明示的投稿依頼"| W["PR Conversationへ通常コメント"]
+    W --> GH
 ```
 
 ### 責務境界
@@ -28,7 +41,7 @@ flowchart LR
 | Backlog API client | HTTPS、認証、timeout、response DTO、rate-limit情報の取得 | 要求の意味解釈、MCP schema |
 | GitHub連携 | PR、Issue、diff、review、CIの取得とPR URL付きレビュー依頼時の投稿 | Backlogデータの取得 |
 
-## 3. レビュー処理フロー
+## 3. 詳細処理シーケンス
 
 ```mermaid
 sequenceDiagram
@@ -43,13 +56,24 @@ sequenceDiagram
     GitHub-->>Skill: GitHub context
     Skill->>Skill: PR本文からBacklog URLを検出
     opt Backlog課題URLあり
-        Skill->>MCP: get_issue_context(backlog_url)
-        MCP->>MCP: 許可space検証・issue key抽出
-        MCP->>Backlog: GET issue
-        Backlog-->>MCP: issue detail
-        MCP->>Backlog: GET comments（ページング）
-        Backlog-->>MCP: comments + changeLog
-        MCP-->>Skill: normalized IssueContext
+        alt get_issue_contextが登録済み
+            Skill->>MCP: get_issue_context(backlog_url)
+        else tool未ロードかつ起動構成がPR変更対象外
+            Skill->>MCP: one-shot scriptで一時コンテナ起動
+        else 安全に起動できない
+            Skill->>Skill: Backlog未確認として限定レビュー
+        end
+        opt MCPを安全に利用可能
+            MCP->>MCP: 許可space検証・issue key抽出
+            MCP->>Backlog: GET issue
+            Backlog-->>MCP: issue detail
+            MCP->>Backlog: GET comments（ページング）
+            Backlog-->>MCP: comments + changeLog
+            MCP-->>Skill: normalized IssueContext
+            opt one-shot fallbackを使用
+                Skill->>MCP: stdio終了・一時コンテナ削除
+            end
+        end
     end
     Skill->>Skill: 情報源を保持して課題・要求R-xxxを整理
     Skill->>Skill: 要求と実装・test・docsを突合
@@ -67,13 +91,15 @@ sequenceDiagram
 
 1. repository、PR番号、base/head SHAを確定し、PR本文、関連GitHub Issue、discussion、diff、CIを取得する。
 2. PR本文と直接参照されたGitHub Issue本文だけからBacklog URLを検出する。
-3. Backlog URLごとに `get_issue_context(backlog_url)` を1回呼ぶ。
-4. MCPがURLのscheme・host・portを `BACKLOG_BASE_URL` と完全一致させ、`/view/<issue-key>` から内部用課題キーを抽出して課題詳細と設定上限までのコメントを取得する。
-5. MCPはコメントの`changeLog`を分離し、取得件数、切り詰め有無、partial状態、sanitized warningを含む正規化結果を返す。
-6. スキルはPR、GitHub Issue、Backlog本文、comment、changeLogの出所を保持したまま要求を `R-001` から採番する。
-7. 要求と実装、test、設定、docsを突合し、固定15観点をすべて判定する。
-8. 指摘を `must`、`question`、`suggestion`、`nitpick` と重大度で分類し、要求IDと双方向に対応付ける。
-9. PR URL付きレビュー依頼は投稿モードとし、head SHAの不変を確認してGitHub PR Conversationへ1件の通常コメントとして投稿する。投稿禁止が明示された場合とPR URLのない一般レビューはプレビューモードとする。
+3. Backlog URLごとに登録済みの `get_issue_context(backlog_url)` を優先して1回呼ぶ。
+4. toolが未ロードなら、対象PRがMCP・skill・起動設定を変更していないことを確認し、one-shot scriptでComposeの一時コンテナを起動して同じtoolを呼ぶ。処理後は `--rm` と名前指定cleanupで削除する。
+5. DockerまたはMCPの起動に失敗した場合はBacklog未確認として扱い、完全レビューを自動投稿しない。GitHub情報だけへ黙って切り替えない。
+6. MCPがURLのscheme・host・portを `BACKLOG_BASE_URL` と完全一致させ、`/view/<issue-key>` から内部用課題キーを抽出して課題詳細と設定上限までのコメントを取得する。
+7. MCPはコメントの`changeLog`を分離し、取得件数、切り詰め有無、partial状態、sanitized warningを含む正規化結果を返す。
+8. スキルはPR、GitHub Issue、Backlog本文、comment、changeLogの出所を保持したまま要求を `R-001` から採番する。
+9. 要求と実装、test、設定、docsを突合し、固定15観点をすべて判定する。
+10. 指摘を `must`、`question`、`suggestion`、`nitpick` と重大度で分類し、要求IDと双方向に対応付ける。
+11. PR URL付きレビュー依頼は投稿モードとし、head SHAの不変を確認してGitHub PR Conversationへ1件の通常コメントとして投稿する。投稿禁止が明示された場合とPR URLのない一般レビューはプレビューモードとする。
 
 ## 4. Backlog MCPツール契約
 
@@ -171,7 +197,7 @@ mcp-pr-review/
 ├── mcp-server-backlog/                           # Backlog読み取り専用MCPを独立したPython projectとして管理する。
 │   ├── src/backlog_mcp/                          # MCP、application、Backlog API adapter、設定を実装する。
 │   ├── tests/                                    # unit、stdio integration、sanitized fixtureを管理する。
-│   ├── scripts/                                  # 実APIとstdio MCPの手動probeを提供する。
+│   ├── scripts/                                  # 実API・stdio probeとskill用one-shot lifecycleを提供する。
 │   ├── Dockerfile                                # development/runtimeの最小Python imageを作成する。
 │   ├── compose.yaml                              # ローカル開発とCodex向けstdio起動を定義する。
 │   ├── pyproject.toml                            # Python version、直接依存、pytest設定を集約する。
@@ -225,6 +251,8 @@ API keyはBacklog API仕様上query parameterとして送信するため、reque
 - API keyをimage、build args、Compose fileへ埋め込まず、実行時envから渡す。
 - stdio transportではcontainerのstdinを開き、stdoutへログを混在させない。
 - Composeは開発とCodex連携のためdevelopment targetを使用し、sourceをbind mountする。
+- project-scoped tool未ロード時はone-shot scriptを使い、名前付きコンテナを `--rm` で起動して終了時にも明示的な削除を試みる。共有リソースを巻き込む `docker compose down` は使わない。
+- 対象PRがMCP、skill、起動設定を変更している場合はhead側のfallbackを実行せず、PR由来コードの実行を防ぐ。
 - Backlog SaaS以外へのegress制限はDocker単体で完全には保証できないため、application側でもbase URLを固定する。
 
 ## 9. テスト方針
@@ -234,6 +262,7 @@ API keyはBacklog API仕様上query parameterとして送信するため、reque
 | Unit | config、URL validator、DTO、use case、tool adapter | networkとsubprocessを使わず、境界値とerror分岐を検証する |
 | HTTP adapter | Backlog client | `httpx.MockTransport`でpagination、timeout、429、invalid JSON、secret非露出を検証する |
 | MCP integration | stdio server | 実subprocessへinitialize、tools/list、tools/callを送りJSON-RPCとstderr分離を検証する |
+| Lifecycle unit | one-shot fallback | image有無、起動、timeout、structured JSON検証、cleanupをsubprocess mockで検証する |
 | Fixture | Backlog response DTO | sanitized fixtureをunit testから読み、実response相当の変換を検証する |
 | Docker smoke | built image | test実行、non-root起動、stdio応答、env不足時のfail-fastを確認する |
 | Skill E2E | PRレビュー結果 | 実PRで要求抽出、15観点、label、traceability、GitHub通常コメント投稿を確認する |
@@ -249,6 +278,7 @@ API keyはBacklog API仕様上query parameterとして送信するため、reque
 | ページング、上限、timeout、429分類、partial result、TTL cache | 完了 |
 | stdio MCPのtool公開とunit/integration test | 完了 |
 | `.codex/config.toml`からComposeを使うMCP登録 | 完了 |
+| tool未ロード時のone-shot Docker fallbackとcleanup | 完了。実Backlog取得成功、partialなし、一時コンテナ削除を確認済み |
 | GitHub PR・Backlog課題・差分の統合レビュー | 実PRで確認済み |
 | PR Conversation通常コメントへのレビュー投稿 | 実PRで確認済み |
 | 再現可能なskill evalシナリオの自動化 | 未整備。今後、判断品質を継続検証する場合に追加する |

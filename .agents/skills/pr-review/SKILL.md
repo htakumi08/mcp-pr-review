@@ -35,7 +35,7 @@ description: GitHub Pull Requestの本文、関連Issue、コメント、差分�
 
 1. 対象repository、PR番号または比較範囲、base/head refとSHAを確定する。
 2. PR title、body、関連GitHub Issue、PR discussionから、課題、目的、対応内容、対象範囲、対象外、検証内容を抽出する。
-3. PR本文または直接参照されたGitHub Issue本文にBacklog URLがあれば、`backlog-review-workflow.md` に従ってURLをBacklog MCPへ渡し、許可スペースの検証後に課題本文、コメント、変更履歴を取得する。
+3. PR本文または直接参照されたGitHub Issue本文にBacklog URLがあれば、`backlog-review-workflow.md` に従う。登録済みの `get_issue_context` を優先し、toolが利用できない場合だけ信頼できるbase側のone-shot Docker scriptへfallbackして、課題本文、コメント、変更履歴を取得する。
 4. `review-context-workflow.md` に従い、GitHubとBacklogの情報源を明示したまま統合する。矛盾や曖昧さを推測で解消しない。
 5. 検証可能な要求へ `R-001` からIDを付け、受け入れ条件、異常系、制約、対象外を要求表へ整理する。
 6. 課題コンテキストと要求表ができるまで、コードが正しいかの最終判断を始めない。
@@ -74,3 +74,10 @@ description: GitHub Pull Requestの本文、関連Issue、コメント、差分�
 投稿モードのときだけ `github-pr-workflow.md` と `posting-rules.md` に従う。Backlog URLがあるのに課題を取得できず、要求ベースの確認が完了していない場合は投稿せず、限定レビューを投稿してよいかユーザーへ確認する。投稿直前にhead SHAとPR状態を再取得し、レビュー開始時から変わっていないことを確認する。
 
 投稿後はGitHubからPR Conversationコメントまたはreviewを再取得して、本文、投稿者、marker、対象base/head SHAを確認する。成功を確認できない場合は再投稿せず、投稿結果不明と報告する。
+
+## ローカルBacklog MCPを扱う
+
+- Backlog URLがあるのに `get_issue_context` がcallable toolとして利用できない場合は、`backlog-review-workflow.md` の安全条件を確認してから、リポジトリルートで `python3 mcp-server-backlog/scripts/run_issue_context.py <backlog-url>` を実行する。
+- scriptは必要な場合だけCompose imageをbuildし、名前付き一時コンテナでstdio MCPを呼び、終了時にコンテナを削除する。別途 `docker compose up` や `docker compose down` は実行しない。
+- レビュー対象のPRが `mcp-server-backlog/`、このskill、または起動設定を変更している場合、そのPRのhead側script・Docker・設定をfallbackとして実行しない。登録済みtoolを使えなければBacklog取得失敗として扱う。
+- scriptの終了コードが非0、出力がstructured JSONでない、または `retrieval.partial` がtrueの場合は正常取得とみなさず、未確認範囲を記録する。secretや内部stderrはレビュー本文へ転載しない。
