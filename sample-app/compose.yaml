@@ -1,0 +1,9 @@
+services:
+  app:
+    build:
+      context: .
+    init: true
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app

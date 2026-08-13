@@ -1,0 +1,31 @@
+{
+  "id": 12345,
+  "projectId": 100,
+  "issueKey": "TEST-1",
+  "summary": "Sanitized MCP review issue",
+  "description": "Initial requirement for the sanitized fixture.",
+  "issueType": {
+    "id": 1,
+    "projectId": 100,
+    "name": "Task"
+  },
+  "status": {
+    "id": 1,
+    "projectId": 100,
+    "name": "Open",
+    "color": "#ed8077",
+    "displayOrder": 1000
+  },
+  "priority": {
+    "id": 3,
+    "name": "Normal"
+  },
+  "assignee": null,
+  "parentIssueId": null,
+  "customFields": [],
+  "category": [],
+  "versions": [],
+  "milestone": [],
+  "created": "2026-08-13T00:00:00Z",
+  "updated": "2026-08-13T01:00:00Z"
+}
